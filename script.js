@@ -1,676 +1,607 @@
 
-(() => {
-  "use strict";
+// ==========================================
+// MENTAL HEALTH PREDICTION - FRONTEND SCRIPT
+// ==========================================
 
-  const API_BASE = "https://mental-health-score-iz4h.onrender.com";
+// FastAPI backend URL
+const API_BASE = "http://127.0.0.1:2200";
 
-  const form = document.getElementById("predict-form");
-  const submitBtn = document.getElementById("submit-btn");
-  const resetBtn = document.getElementById("reset-btn");
-  const errorRetryBtn = document.getElementById("error-retry-btn");
+// ==========================================
+// DOM ELEMENTS
+// ==========================================
 
-  const stateIdle = document.getElementById("state-idle");
-  const stateLoading = document.getElementById("state-loading");
-  const stateResult = document.getElementById("state-result");
-  const stateError = document.getElementById("state-error");
+const form = document.getElementById("predict-form");
 
-  const scoreNumberEl = document.getElementById("score-number");
-  const scoreBandEl = document.getElementById("score-band");
-  const scoreContextEl = document.getElementById("score-context");
-  const gaugeFill = document.getElementById("gauge-fill");
-  const errorLabelEl = document.getElementById("error-label");
-  const errorCopyEl = document.getElementById("error-copy");
+const submitBtn = document.getElementById("submit-btn");
+const resetBtn = document.getElementById("reset-btn");
+const retryBtn = document.getElementById("error-retry-btn");
 
-  const GAUGE_ARC_LENGTH = 314;
-  const TOTAL_HOURS = 24;
+const idleState = document.getElementById("state-idle");
+const loadingState = document.getElementById("state-loading");
+const resultState = document.getElementById("state-result");
+const errorState = document.getElementById("state-error");
 
-  // ---------------------------------------------------------
-  // Four fields sharing the 24-hour daily budget
-  // ---------------------------------------------------------
+const scoreNumber = document.getElementById("score-number");
+const scoreBand = document.getElementById("score-band");
+const scoreContext = document.getElementById("score-context");
+const gaugeFill = document.getElementById("gauge-fill");
 
-  const hoursFields = [
-    "avg_daily_usage_hours",
-    "study_hours",
-    "physical_activity_hours",
-    "sleep_hours_per_night"
-  ];
+const errorLabel = document.getElementById("error-label");
+const errorCopy = document.getElementById("error-copy");
 
-  const hourInputs = hoursFields.map(id =>
-    document.getElementById(id)
-  );
+// Stress level elements
+const stressGroup = document.getElementById("stress_level_group");
+const stressInput = document.getElementById("stress_level");
 
-  let lastEditedHoursField = null;
+// ==========================================
+// FOUR HOURS INPUT FIELDS
+// ==========================================
 
-  // Create remaining-hours information dynamically
-  const hoursSummary = document.createElement("p");
-  hoursSummary.id = "hours-remaining";
-  hoursSummary.className = "hint";
-  hoursSummary.setAttribute("aria-live", "polite");
+const hoursFields = [
+    document.querySelector('[name="avg_daily_usage_hours"]'),
+    document.querySelector('[name="study_hours"]'),
+    document.querySelector('[name="physical_activity_hours"]'),
+    document.querySelector('[name="sleep_hours_per_night"]')
+].filter(Boolean);
 
-  document
-    .getElementById("sleep_hours_per_night")
-    .closest(".field")
-    .insertAdjacentElement("afterend", hoursSummary);
+// Create remaining-hours status message
+let hoursStatus = document.getElementById("hours-status");
 
-  // ---------------------------------------------------------
-  // Dynamic 24-hour allocation
-  // ---------------------------------------------------------
+if (!hoursStatus && hoursFields.length > 0) {
+    hoursStatus = document.createElement("p");
+    hoursStatus.id = "hours-status";
+    hoursStatus.style.marginTop = "10px";
+    hoursStatus.style.fontSize = "13px";
 
-  function updateHoursBudget() {
+    const lastField = hoursFields[hoursFields.length - 1];
 
-    const values = hourInputs.map(input => {
-      if (input.value.trim() === "") return 0;
-      return Number(input.value);
+    lastField.parentElement.insertAdjacentElement(
+        "afterend",
+        hoursStatus
+    );
+}
+
+// ==========================================
+// HOURS VALIDATION
+// TOTAL MUST NOT EXCEED 24 HOURS
+// ==========================================
+
+function getTotalHours() {
+    return hoursFields.reduce((total, field) => {
+        return total + (Number(field.value) || 0);
+    }, 0);
+}
+
+function updateHoursBudget(changedField = null) {
+
+    let totalHours = getTotalHours();
+
+    // If the total exceeds 24, limit the field
+    // that the user has just changed.
+    if (totalHours > 24 && changedField) {
+
+        const otherHours = hoursFields.reduce((total, field) => {
+            if (field === changedField) {
+                return total;
+            }
+
+            return total + (Number(field.value) || 0);
+
+        }, 0);
+
+        const availableHours = Math.max(0, 24 - otherHours);
+
+        changedField.value = Math.min(
+            Number(changedField.value) || 0,
+            availableHours
+        );
+
+        totalHours = getTotalHours();
+    }
+
+    // Dynamically update maximum allowed values
+    hoursFields.forEach(field => {
+
+        const otherHours = hoursFields.reduce((total, otherField) => {
+
+            if (otherField === field) {
+                return total;
+            }
+
+            return total + (Number(otherField.value) || 0);
+
+        }, 0);
+
+        const availableHours = Math.max(0, 24 - otherHours);
+
+        field.max = availableHours;
     });
 
-    const totalUsed = values.reduce((sum, value) => sum + value, 0);
+    // Update remaining hours message
+    const remainingHours = Math.max(0, 24 - totalHours);
 
-    const remaining = TOTAL_HOURS - totalUsed;
+    if (hoursStatus) {
 
-    // Update maximum available hours for every field.
-    hourInputs.forEach((input, index) => {
+        hoursStatus.textContent =
+            `${remainingHours.toFixed(1)} hours remaining out of 24`;
 
-      const otherHours = totalUsed - values[index];
+        hoursStatus.style.color = "#16a34a";
+    }
+}
 
-      const availableHours = Math.max(
-        0,
-        TOTAL_HOURS - otherHours
-      );
+// Attach listeners to all four fields
+hoursFields.forEach(field => {
 
-      input.max = availableHours.toFixed(1);
+    field.addEventListener("input", () => {
+        updateHoursBudget(field);
     });
 
-    // Display remaining hours without showing negative values.
-    if (remaining > 0) {
+    field.addEventListener("change", () => {
+        updateHoursBudget(field);
+    });
 
-      hoursSummary.textContent =
-        `${remaining.toFixed(1)} hours remaining out of 24 hours.`;
+});
 
-    } else if (remaining === 0) {
+// Initial calculation
+updateHoursBudget();
 
-      hoursSummary.textContent =
-        "24-hour daily budget fully allocated.";
+// ==========================================
+// STRESS LEVEL SELECTION
+// ==========================================
+
+if (stressGroup && stressInput) {
+
+    stressGroup.addEventListener("click", function (event) {
+
+        const selectedOption = event.target.closest(
+            "button, [data-value], [data-stress-level]"
+        );
+
+        if (!selectedOption || !stressGroup.contains(selectedOption)) {
+            return;
+        }
+
+        const selectedValue =
+            selectedOption.dataset.stressLevel ??
+            selectedOption.dataset.value ??
+            selectedOption.value;
+
+        if (selectedValue === undefined || selectedValue === "") {
+            return;
+        }
+
+        stressInput.value = selectedValue;
+
+        // Update selected appearance
+        stressGroup.querySelectorAll(
+            "button, [data-value], [data-stress-level]"
+        ).forEach(option => {
+
+            option.classList.remove("active", "selected");
+            option.setAttribute("aria-pressed", "false");
+
+        });
+
+        selectedOption.classList.add("active");
+        selectedOption.setAttribute("aria-pressed", "true");
+
+    });
+}
+
+// ==========================================
+// STATE MANAGEMENT
+// ==========================================
+
+function showState(state) {
+
+    const states = [
+        idleState,
+        loadingState,
+        resultState,
+        errorState
+    ];
+
+    states.forEach(element => {
+
+        if (element) {
+            element.hidden = true;
+        }
+
+    });
+
+    const selectedState = {
+        idle: idleState,
+        loading: loadingState,
+        result: resultState,
+        error: errorState
+    }[state];
+
+    if (selectedState) {
+        selectedState.hidden = false;
+    }
+}
+
+// ==========================================
+// ERROR HANDLING
+// ==========================================
+
+function showError(title, message) {
+
+    if (errorLabel) {
+        errorLabel.textContent = title;
+    }
+
+    if (errorCopy) {
+        errorCopy.textContent = message;
+    }
+
+    showState("error");
+}
+
+// ==========================================
+// CLIENT-SIDE FORM VALIDATION
+// ==========================================
+
+function validateForm() {
+
+    // Check normal HTML form validation
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return false;
+    }
+
+    // Check the four hours fields
+    for (const field of hoursFields) {
+
+        const value = Number(field.value);
+
+        if (!Number.isFinite(value) || value < 0) {
+
+            alert("Please enter valid non-negative hours.");
+
+            field.focus();
+
+            return false;
+        }
+
+    }
+
+    const totalHours = getTotalHours();
+
+    // Total can be less than or equal to 24
+    if (totalHours > 24.001) {
+
+        alert(
+            "The total of all four hour fields cannot exceed 24 hours."
+        );
+
+        return false;
+    }
+
+    // Check stress level
+    if (stressInput && !stressInput.value) {
+
+        alert("Please select your stress level.");
+
+        return false;
+    }
+
+    return true;
+}
+
+// ==========================================
+// COLLECT FORM DATA
+// ==========================================
+
+function collectFormData() {
+
+    const formData = new FormData(form);
+
+    const payload = Object.fromEntries(formData.entries());
+
+    // Convert numerical fields into numbers
+    const numericFields = [
+        "age",
+        "avg_daily_usage_hours",
+        "daily_unlocks",
+        "study_hours",
+        "physical_activity_hours",
+        "sleep_hours_per_night",
+        "stress_level"
+    ];
+
+    numericFields.forEach(field => {
+
+        if (payload[field] !== undefined && payload[field] !== "") {
+            payload[field] = Number(payload[field]);
+        }
+
+    });
+
+    return payload;
+}
+
+// ==========================================
+// SCORE INTERPRETATION
+// ==========================================
+
+function getScoreInterpretation(score) {
+
+    if (score < 30) {
+
+        return {
+            band: "Low",
+            context: "Your predicted score falls in the low range."
+        };
+
+    } else if (score < 60) {
+
+        return {
+            band: "Moderate",
+            context: "Your predicted score falls in the moderate range."
+        };
+
+    } else if (score < 80) {
+
+        return {
+            band: "High",
+            context: "Your predicted score falls in the high range."
+        };
 
     } else {
 
-      hoursSummary.textContent =
-        `Daily budget exceeded by ${Math.abs(remaining).toFixed(1)} hours. Reduce your entries.`;
+        return {
+            band: "Very High",
+            context: "Your predicted score falls in the very high range."
+        };
 
     }
-  }
+}
 
-  // Listen to changes in all four fields.
-  hourInputs.forEach(input => {
+// ==========================================
+// DISPLAY PREDICTION RESULT
+// ==========================================
 
-    input.addEventListener("input", () => {
+function displayResult(score) {
 
-      lastEditedHoursField = input;
+    const numericScore = Number(score);
 
-      clearFieldError(input);
+    if (!Number.isFinite(numericScore)) {
 
-      updateHoursBudget();
-
-    });
-
-    input.addEventListener("change", updateHoursBudget);
-
-  });
-
-  updateHoursBudget();
-
-  // ---------------------------------------------------------
-  // Draw gauge tick marks
-  // ---------------------------------------------------------
-
-  function drawTicks() {
-
-    document.querySelectorAll(".gauge-ticks").forEach(g => {
-
-      g.innerHTML = "";
-
-      const cx = 120;
-      const cy = 140;
-      const rOuter = 100;
-      const rInner = 90;
-
-      for (let i = 0; i <= 10; i += 2) {
-
-        const angle = Math.PI - (i / 10) * Math.PI;
-
-        const x1 = cx + rOuter * Math.cos(angle);
-        const y1 = cy - rOuter * Math.sin(angle);
-
-        const x2 = cx + rInner * Math.cos(angle);
-        const y2 = cy - rInner * Math.sin(angle);
-
-        const line = document.createElementNS(
-          "http://www.w3.org/2000/svg",
-          "line"
+        showError(
+            "Invalid prediction",
+            "The server returned an invalid prediction score."
         );
 
-        line.setAttribute("x1", x1.toFixed(1));
-        line.setAttribute("y1", y1.toFixed(1));
-        line.setAttribute("x2", x2.toFixed(1));
-        line.setAttribute("y2", y2.toFixed(1));
+        return;
+    }
 
-        g.appendChild(line);
+    const interpretation = getScoreInterpretation(numericScore);
 
-      }
+    // Display score
+    if (scoreNumber) {
+        scoreNumber.textContent = numericScore.toFixed(2);
+    }
 
-    });
+    // Display score category
+    if (scoreBand) {
+        scoreBand.textContent = interpretation.band;
+    }
 
-  }
+    // Display explanation
+    if (scoreContext) {
+        scoreContext.textContent = interpretation.context;
+    }
 
-  drawTicks();
-
-  // ---------------------------------------------------------
-  // Stress level segmented control
-  // ---------------------------------------------------------
-
-  const segGroup = document.getElementById("stress_level_group");
-  const stressHiddenInput = document.getElementById("stress_level");
-
-  segGroup.querySelectorAll(".seg-btn").forEach(btn => {
-
-    btn.addEventListener("click", () => {
-
-      segGroup.querySelectorAll(".seg-btn").forEach(b =>
-        b.classList.remove("active")
-      );
-
-      btn.classList.add("active");
-
-      stressHiddenInput.value = btn.dataset.value;
-
-      clearFieldError(stressHiddenInput);
-
-    });
-
-  });
-
-  // ---------------------------------------------------------
-  // Field error helpers
-  // ---------------------------------------------------------
-
-  function fieldWrapper(input) {
-    return input.closest(".field");
-  }
-
-  function setFieldError(input, message) {
-
-    const wrap = fieldWrapper(input);
-
-    if (!wrap) return;
-
-    wrap.classList.add("field-error");
-
-    const msgEl = wrap.querySelector(".error-msg");
-
-    if (msgEl) msgEl.textContent = message;
-
-  }
-
-  function clearFieldError(input) {
-
-    const wrap = fieldWrapper(input);
-
-    if (!wrap) return;
-
-    wrap.classList.remove("field-error");
-
-    const msgEl = wrap.querySelector(".error-msg");
-
-    if (msgEl) msgEl.textContent = "";
-
-  }
-
-  function clearAllErrors() {
-
-    form.querySelectorAll(".field").forEach(f =>
-      f.classList.remove("field-error")
+    // Update gauge
+    const normalizedScore = Math.min(
+        100,
+        Math.max(0, numericScore)
     );
 
-    form.querySelectorAll(".error-msg").forEach(m =>
-      m.textContent = ""
-    );
+    if (gaugeFill) {
 
-  }
+        gaugeFill.style.width = `${normalizedScore}%`;
 
-  // ---------------------------------------------------------
-  // Client-side validation
-  // ---------------------------------------------------------
+        gaugeFill.style.setProperty(
+            "--score",
+            normalizedScore
+        );
 
-  function validate(payload) {
-
-    const errors = [];
-
-    const numericChecks = [
-      ["age", 10, 100],
-      ["avg_daily_usage_hours", 0, 24],
-      ["daily_unlocks", 0, Infinity],
-      ["study_hours", 0, 24],
-      ["physical_activity_hours", 0, 24],
-      ["sleep_hours_per_night", 0, 24]
-    ];
-
-    numericChecks.forEach(([key, min, max]) => {
-
-      const input = document.getElementById(key);
-      const val = payload[key];
-
-      if (!Number.isFinite(val)) {
-
-        errors.push([input, "Enter a valid number."]);
-
-      } else if (val < min || val > max) {
-
-        errors.push([
-          input,
-          `Must be between ${min} and ${max === Infinity ? "0+" : max}.`
-        ]);
-
-      }
-
-    });
-
-    // Required text and selection fields
-    [
-      "gender",
-      "country",
-      "academic_level",
-      "most_used_platform",
-      "purpose_of_use"
-    ].forEach(key => {
-
-      const input = document.getElementById(key);
-
-      if (!payload[key] || String(payload[key]).trim() === "") {
-
-        errors.push([input, "This field is required."]);
-
-      }
-
-    });
-
-    // Stress validation
-    if (!payload.stress_level) {
-
-      errors.push([
-        stressHiddenInput,
-        "Pick a stress level."
-      ]);
-
+        gaugeFill.setAttribute(
+            "aria-valuenow",
+            normalizedScore
+        );
     }
-
-    // -------------------------------------------------------
-    // NEW: Validate total daily hours
-    // -------------------------------------------------------
-
-    const allHoursValid = hoursFields.every(key =>
-      Number.isFinite(payload[key]) &&
-      payload[key] >= 0 &&
-      payload[key] <= 24
-    );
-
-    if (allHoursValid) {
-
-      const totalHours = hoursFields.reduce(
-        (sum, key) => sum + payload[key],
-        0
-      );
-
-      const difference = TOTAL_HOURS - totalHours;
-
-      if (Math.abs(difference) > 0.001) {
-
-        const targetInput =
-          lastEditedHoursField || hourInputs[0];
-
-        if (difference > 0) {
-
-          errors.push([
-            targetInput,
-            `Your four daily-hour fields must total 24 hours. Add ${difference.toFixed(1)} more hours.`
-          ]);
-
-        } else {
-
-          errors.push([
-            targetInput,
-            `Your four daily-hour fields exceed 24 hours by ${Math.abs(difference).toFixed(1)} hours.`
-          ]);
-
-        }
-
-      }
-
-    }
-
-    return errors;
-
-  }
-
-  // ---------------------------------------------------------
-  // Collect form data
-  // ---------------------------------------------------------
-
-  function collectPayload() {
-
-    const fd = new FormData(form);
-
-    return {
-
-      age: fd.get("age") === ""
-        ? NaN : parseInt(fd.get("age"), 10),
-
-      gender: fd.get("gender") || "",
-
-      country: (fd.get("country") || "").trim(),
-
-      academic_level: fd.get("academic_level") || "",
-
-      most_used_platform: fd.get("most_used_platform") || "",
-
-      purpose_of_use: fd.get("purpose_of_use") || "",
-
-      avg_daily_usage_hours: fd.get("avg_daily_usage_hours") === ""
-        ? NaN : parseFloat(fd.get("avg_daily_usage_hours")),
-
-      daily_unlocks: fd.get("daily_unlocks") === ""
-        ? NaN : parseInt(fd.get("daily_unlocks"), 10),
-
-      study_hours: fd.get("study_hours") === ""
-        ? NaN : parseFloat(fd.get("study_hours")),
-
-      physical_activity_hours: fd.get("physical_activity_hours") === ""
-        ? NaN : parseFloat(fd.get("physical_activity_hours")),
-
-      sleep_hours_per_night: fd.get("sleep_hours_per_night") === ""
-        ? NaN : parseFloat(fd.get("sleep_hours_per_night")),
-
-      stress_level: fd.get("stress_level") || ""
-
-    };
-
-  }
-
-  // ---------------------------------------------------------
-  // UI state switching
-  // ---------------------------------------------------------
-
-  function showState(name) {
-
-    [stateIdle, stateLoading, stateResult, stateError].forEach(el => {
-      el.hidden = true;
-    });
-
-    const states = {
-      idle: stateIdle,
-      loading: stateLoading,
-      result: stateResult,
-      error: stateError
-    };
-
-    states[name].hidden = false;
-
-  }
-
-  function setSubmitting(isSubmitting) {
-
-    submitBtn.disabled = isSubmitting;
-
-    submitBtn.classList.toggle("loading", isSubmitting);
-
-  }
-
-  // ---------------------------------------------------------
-  // Score interpretation
-  // ---------------------------------------------------------
-
-  function bandFor(score) {
-
-    if (score < 4) {
-
-      return {
-        label: "Signal: strained",
-        context: "Your responses suggest elevated strain right now. Small shifts in sleep or screen time can go a long way."
-      };
-
-    }
-
-    if (score < 7) {
-
-      return {
-        label: "Signal: balanced",
-        context: "Your rhythm looks fairly steady, with some room to recover and reset."
-      };
-
-    }
-
-    return {
-      label: "Signal: strong",
-      context: "Your habits point to a well-supported, resilient baseline. Keep it up."
-    };
-
-  }
-
-  // ---------------------------------------------------------
-  // Render prediction result
-  // ---------------------------------------------------------
-
-  function renderResult(score) {
-
-    const clamped = Math.max(0, Math.min(10, score));
-
-    const { label, context } = bandFor(clamped);
-
-    scoreNumberEl.textContent = score.toFixed(2);
-
-    scoreBandEl.textContent = label;
-
-    scoreContextEl.textContent = context;
-
-    gaugeFill.style.transition = "none";
-
-    gaugeFill.style.strokeDashoffset = String(GAUGE_ARC_LENGTH);
-
-    requestAnimationFrame(() => {
-
-      gaugeFill.style.transition = "";
-
-      const offset = GAUGE_ARC_LENGTH * (1 - clamped / 10);
-
-      gaugeFill.style.strokeDashoffset = String(offset);
-
-    });
 
     showState("result");
+}
 
-  }
+// ==========================================
+// SUBMIT FORM AND CALL FASTAPI
+// ==========================================
 
-  function renderError(label, copy) {
+form.addEventListener("submit", async function (event) {
 
-    errorLabelEl.textContent = label;
+    event.preventDefault();
 
-    errorCopyEl.textContent = copy;
-
-    showState("error");
-
-  }
-
-  // ---------------------------------------------------------
-  // Handle FastAPI validation errors
-  // ---------------------------------------------------------
-
-  function applyServerValidationErrors(detail) {
-
-    if (!Array.isArray(detail)) return false;
-
-    let matched = false;
-
-    detail.forEach(err => {
-
-      const field = Array.isArray(err.loc)
-        ? err.loc[err.loc.length - 1]
-        : null;
-
-      const input = field
-        ? document.getElementById(field)
-        : null;
-
-      const target = field === "stress_level"
-        ? stressHiddenInput
-        : input;
-
-      if (target) {
-
-        setFieldError(target, err.msg || "Invalid value.");
-
-        matched = true;
-
-      }
-
-    });
-
-    return matched;
-
-  }
-
-  // ---------------------------------------------------------
-  // Form submission
-  // ---------------------------------------------------------
-
-  form.addEventListener("submit", async e => {
-
-    e.preventDefault();
-
-    clearAllErrors();
-
-    const payload = collectPayload();
-
-    const clientErrors = validate(payload);
-
-    if (clientErrors.length > 0) {
-
-      clientErrors.forEach(([input, msg]) => {
-
-        if (input) setFieldError(input, msg);
-
-      });
-
-      clientErrors[0][0]?.focus?.();
-
-      return;
-
+    // Validate before sending data
+    if (!validateForm()) {
+        return;
     }
 
-    setSubmitting(true);
+    const payload = collectFormData();
 
+    // Show loading state
     showState("loading");
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+    }
 
     try {
 
-      const res = await fetch(`${API_BASE}/predict`, {
+        const response = await fetch(
+            `${API_BASE}/predict`,
+            {
+                method: "POST",
 
-        method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
 
-        headers: {
-          "Content-Type": "application/json"
-        },
-
-        body: JSON.stringify(payload)
-
-      });
-
-      if (res.status === 422) {
-
-        const body = await res.json().catch(() => null);
-
-        const matched = body && applyServerValidationErrors(body.detail);
-
-        renderError(
-          "Check your inputs",
-          matched
-            ? "The API rejected a few fields. Details are marked on the form."
-            : "The API rejected this submission. Please review your inputs."
+                body: JSON.stringify(payload)
+            }
         );
 
-        return;
+        // Handle unsuccessful API responses
+        if (!response.ok) {
 
-      }
+            let errorMessage = "Unable to process your prediction.";
 
-      if (!res.ok) {
+            try {
 
-        let detailMsg = `The API responded with status ${res.status}.`;
+                const errorData = await response.json();
 
-        const body = await res.json().catch(() => null);
+                if (errorData.detail) {
+                    errorMessage = Array.isArray(errorData.detail)
+                        ? errorData.detail.map(item => item.msg).join(", ")
+                        : errorData.detail;
+                }
 
-        if (body && typeof body.detail === "string") {
-          detailMsg = body.detail;
+            } catch (error) {
+                // Keep default error message
+            }
+
+            throw new Error(errorMessage);
         }
 
-        renderError("Prediction failed", detailMsg);
+        const result = await response.json();
 
-        return;
+        // Read prediction from FastAPI response
+        const predictedScore =
+            result.predicted_mental_health_score;
 
-      }
+        if (predictedScore === undefined || predictedScore === null) {
 
-      const data = await res.json();
+            throw new Error(
+                "Prediction score was not found in the API response."
+            );
+        }
 
-      if (typeof data.predicted_mental_health_score !== "number") {
+        // Display prediction
+        displayResult(predictedScore);
 
-        renderError(
-          "Unexpected response",
-          "The API responded, but the score was missing or malformed."
+    } catch (error) {
+
+        console.error("Prediction Error:", error);
+
+        showError(
+            "Prediction Failed",
+            error.message || "Please check your backend connection and try again."
         );
-
-        return;
-
-      }
-
-      renderResult(data.predicted_mental_health_score);
-
-    } catch (err) {
-
-      renderError(
-        "Can't reach the server",
-        `Couldn't connect to ${API_BASE}. Make sure your FastAPI backend is running.`
-      );
 
     } finally {
 
-      setSubmitting(false);
+        if (submitBtn) {
+            submitBtn.disabled = false;
+        }
 
     }
 
-  });
+});
 
-  // ---------------------------------------------------------
-  // Clear errors when user edits fields
-  // ---------------------------------------------------------
+// ==========================================
+// RESET FORM
+// ==========================================
 
-  form.querySelectorAll("input, select").forEach(el => {
+function resetForm() {
 
-    el.addEventListener("input", () => clearFieldError(el));
+    form.reset();
 
-    el.addEventListener("change", () => clearFieldError(el));
+    // Reset stress level
+    if (stressInput) {
+        stressInput.value = "";
+    }
 
-  });
+    if (stressGroup) {
 
-  // ---------------------------------------------------------
-  // Reset and retry
-  // ---------------------------------------------------------
+        stressGroup.querySelectorAll(
+            "button, [data-value], [data-stress-level]"
+        ).forEach(option => {
 
-  resetBtn.addEventListener("click", () => {
+            option.classList.remove("active", "selected");
 
+            option.setAttribute("aria-pressed", "false");
+
+        });
+
+    }
+
+    // Reset hour limits and remaining-hours message
+    hoursFields.forEach(field => {
+        field.max = 24;
+    });
+
+    updateHoursBudget();
+
+    // Reset gauge
+    if (scoreNumber) {
+        scoreNumber.textContent = "--";
+    }
+
+    if (scoreBand) {
+        scoreBand.textContent = "";
+    }
+
+    if (scoreContext) {
+        scoreContext.textContent = "";
+    }
+
+    if (gaugeFill) {
+        gaugeFill.style.width = "0%";
+        gaugeFill.style.setProperty("--score", 0);
+    }
+
+    // Enable submit button
+    if (submitBtn) {
+        submitBtn.disabled = false;
+    }
+
+    // Return to initial state
     showState("idle");
+}
 
-  });
+// Reset button
+if (resetBtn) {
 
-  errorRetryBtn.addEventListener("click", () => {
+    resetBtn.addEventListener("click", function (event) {
 
-    showState("idle");
+        event.preventDefault();
 
-  });
+        resetForm();
 
-})();
+    });
+
+}
+
+// Retry button
+if (retryBtn) {
+
+    retryBtn.addEventListener("click", function () {
+
+        showState("idle");
+
+        if (form) {
+            form.requestSubmit();
+        }
+
+    });
+
+}
+
+// ==========================================
+// INITIAL PAGE STATE
+// ==========================================
+
+showState("idle");
