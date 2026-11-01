@@ -476,7 +476,33 @@ form.addEventListener("submit", async function (event) {
             throw new Error(errorMessage);
         }
 
-        const result = await response.json();
+const responseText = await response.text();
+
+console.log("Backend response:", responseText);
+
+let result;
+
+try {
+    result = JSON.parse(responseText);
+} catch (error) {
+    throw new Error(
+        `Backend returned an invalid or empty response. HTTP Status: ${response.status}`
+    );
+}
+
+if (!response.ok) {
+    throw new Error(
+        result.detail || "Backend prediction failed."
+    );
+}
+
+const predictedScore = result.predicted_mental_health_score;
+
+if (predictedScore === undefined || predictedScore === null) {
+    throw new Error("Prediction score is missing from backend response.");
+}
+
+displayResult(predictedScore);
 
         // Read prediction from FastAPI response
         const predictedScore =
