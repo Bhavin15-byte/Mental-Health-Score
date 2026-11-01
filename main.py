@@ -64,7 +64,7 @@ app.add_middleware(
     allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"]
 )
 
 
@@ -165,10 +165,7 @@ def health_check():
 # 9. PREDICTION ENDPOINT
 # --------------------------------------------------
 
-@app.post(
-    "/predict",
-    response_model=PredictionResponse
-)
+@app.post("/predict", response_model=PredictionResponse)
 def predict(data: StudentData):
 
     try:
