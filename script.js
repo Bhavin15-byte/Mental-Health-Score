@@ -1,10 +1,13 @@
 
 // ==========================================
-// MENTAL HEALTH PREDICTION - FRONTEND SCRIPT
+// MENTAL HEALTH SIGNAL - FRONTEND JAVASCRIPT
 // ==========================================
 
-// FastAPI backend URL
+// IMPORTANT:
+// Replace this with your actual deployed FastAPI backend URL.
+// Do not use your frontend URL unless FastAPI is hosted there too.
 const API_BASE = "https://mental-health-score-1-qdl2.onrender.com";
+
 
 // ==========================================
 // DOM ELEMENTS
@@ -26,61 +29,111 @@ const scoreBand = document.getElementById("score-band");
 const scoreContext = document.getElementById("score-context");
 const gaugeFill = document.getElementById("gauge-fill");
 
-const errorLabel = document.getElementById("error-label");
 const errorCopy = document.getElementById("error-copy");
 
-// Stress level elements
+
+// ==========================================
+// STRESS LEVEL ELEMENTS
+// ==========================================
+
 const stressGroup = document.getElementById("stress_level_group");
 const stressInput = document.getElementById("stress_level");
+
+
+// Directly attach click listeners to the four buttons.
+// This ensures the selected stress value is saved correctly.
+
+if (stressGroup && stressInput) {
+
+    const stressButtons = stressGroup.querySelectorAll(".seg-btn");
+
+    stressButtons.forEach(button => {
+
+        button.addEventListener("click", function () {
+
+            const selectedValue = this.dataset.value;
+
+            // Save selected value in hidden input
+            stressInput.value = selectedValue;
+
+            // Update selected button appearance
+            stressButtons.forEach(btn => {
+
+                btn.classList.remove("active", "selected");
+
+                btn.setAttribute("aria-pressed", "false");
+
+            });
+
+            this.classList.add("active", "selected");
+
+            this.setAttribute("aria-pressed", "true");
+
+            console.log("Selected stress level:", selectedValue);
+
+        });
+
+    });
+
+}
+
 
 // ==========================================
 // FOUR HOURS INPUT FIELDS
 // ==========================================
 
 const hoursFields = [
-    document.querySelector('[name="avg_daily_usage_hours"]'),
-    document.querySelector('[name="study_hours"]'),
-    document.querySelector('[name="physical_activity_hours"]'),
-    document.querySelector('[name="sleep_hours_per_night"]')
+    document.getElementById("avg_daily_usage_hours"),
+    document.getElementById("study_hours"),
+    document.getElementById("physical_activity_hours"),
+    document.getElementById("sleep_hours_per_night")
 ].filter(Boolean);
 
-// Create remaining-hours status message
+
+// Create remaining-hours message
+
 let hoursStatus = document.getElementById("hours-status");
 
 if (!hoursStatus && hoursFields.length > 0) {
+
     hoursStatus = document.createElement("p");
+
     hoursStatus.id = "hours-status";
+
     hoursStatus.style.marginTop = "10px";
     hoursStatus.style.fontSize = "13px";
 
-    const lastField = hoursFields[hoursFields.length - 1];
+    const sleepField = hoursFields[hoursFields.length - 1];
 
-    lastField.parentElement.insertAdjacentElement(
-        "afterend",
-        hoursStatus
-    );
+    sleepField.closest(".field").appendChild(hoursStatus);
+
 }
 
-// ==========================================
-// HOURS VALIDATION
-// TOTAL MUST NOT EXCEED 24 HOURS
-// ==========================================
+
+// Calculate total hours
 
 function getTotalHours() {
+
     return hoursFields.reduce((total, field) => {
+
         return total + (Number(field.value) || 0);
+
     }, 0);
+
 }
+
+
+// Update available hours
 
 function updateHoursBudget(changedField = null) {
 
     let totalHours = getTotalHours();
 
-    // If the total exceeds 24, limit the field
-    // that the user has just changed.
+    // Prevent total from exceeding 24 hours
     if (totalHours > 24 && changedField) {
 
         const otherHours = hoursFields.reduce((total, field) => {
+
             if (field === changedField) {
                 return total;
             }
@@ -97,9 +150,12 @@ function updateHoursBudget(changedField = null) {
         );
 
         totalHours = getTotalHours();
+
     }
 
-    // Dynamically update maximum allowed values
+
+    // Dynamically update maximum allowed hours
+
     hoursFields.forEach(field => {
 
         const otherHours = hoursFields.reduce((total, otherField) => {
@@ -112,12 +168,13 @@ function updateHoursBudget(changedField = null) {
 
         }, 0);
 
-        const availableHours = Math.max(0, 24 - otherHours);
+        field.max = Math.max(0, 24 - otherHours);
 
-        field.max = availableHours;
     });
 
-    // Update remaining hours message
+
+    // Display remaining hours
+
     const remainingHours = Math.max(0, 24 - totalHours);
 
     if (hoursStatus) {
@@ -125,68 +182,31 @@ function updateHoursBudget(changedField = null) {
         hoursStatus.textContent =
             `${remainingHours.toFixed(1)} hours remaining out of 24`;
 
-        hoursStatus.style.color = "#16a34a";
     }
+
 }
 
-// Attach listeners to all four fields
+
+// Attach listeners
+
 hoursFields.forEach(field => {
 
-    field.addEventListener("input", () => {
-        updateHoursBudget(field);
+    field.addEventListener("input", function () {
+
+        updateHoursBudget(this);
+
     });
 
-    field.addEventListener("change", () => {
-        updateHoursBudget(field);
+    field.addEventListener("change", function () {
+
+        updateHoursBudget(this);
+
     });
 
 });
 
-// Initial calculation
 updateHoursBudget();
 
-// ==========================================
-// STRESS LEVEL SELECTION
-// ==========================================
-
-if (stressGroup && stressInput) {
-
-    stressGroup.addEventListener("click", function (event) {
-
-        const selectedOption = event.target.closest(
-            "button, [data-value], [data-stress-level]"
-        );
-
-        if (!selectedOption || !stressGroup.contains(selectedOption)) {
-            return;
-        }
-
-        const selectedValue =
-            selectedOption.dataset.stressLevel ??
-            selectedOption.dataset.value ??
-            selectedOption.value;
-
-        if (selectedValue === undefined || selectedValue === "") {
-            return;
-        }
-
-        stressInput.value = selectedValue;
-
-        // Update selected appearance
-        stressGroup.querySelectorAll(
-            "button, [data-value], [data-stress-level]"
-        ).forEach(option => {
-
-            option.classList.remove("active", "selected");
-            option.setAttribute("aria-pressed", "false");
-
-        });
-
-        selectedOption.classList.add("active");
-        selectedOption.setAttribute("aria-pressed", "true");
-
-    });
-}
 
 // ==========================================
 // STATE MANAGEMENT
@@ -209,85 +229,107 @@ function showState(state) {
 
     });
 
-    const selectedState = {
+    const stateMap = {
         idle: idleState,
         loading: loadingState,
         result: resultState,
         error: errorState
-    }[state];
+    };
 
-    if (selectedState) {
-        selectedState.hidden = false;
+    if (stateMap[state]) {
+
+        stateMap[state].hidden = false;
+
     }
+
 }
+
 
 // ==========================================
 // ERROR HANDLING
 // ==========================================
 
-function showError(title, message) {
-
-    if (errorLabel) {
-        errorLabel.textContent = title;
-    }
+function showError(message) {
 
     if (errorCopy) {
+
         errorCopy.textContent = message;
+
     }
 
     showState("error");
+
 }
 
+
 // ==========================================
-// CLIENT-SIDE FORM VALIDATION
+// FORM VALIDATION
 // ==========================================
 
 function validateForm() {
 
-    // Check normal HTML form validation
+    // Validate normal form fields
+
     if (!form.checkValidity()) {
+
         form.reportValidity();
+
         return false;
+
     }
 
-    // Check the four hours fields
+
+    // Validate four hours fields
+
     for (const field of hoursFields) {
 
         const value = Number(field.value);
 
-        if (!Number.isFinite(value) || value < 0) {
+        if (!Number.isFinite(value) || value < 0 || value > 24) {
 
-            alert("Please enter valid non-negative hours.");
+            alert("Please enter valid hours between 0 and 24.");
 
             field.focus();
 
             return false;
+
         }
 
     }
 
+
+    // Total hours must not exceed 24
+
     const totalHours = getTotalHours();
 
-    // Total can be less than or equal to 24
     if (totalHours > 24.001) {
 
-        alert(
-            "The total of all four hour fields cannot exceed 24 hours."
-        );
+        alert("The combined hours cannot exceed 24 hours.");
 
         return false;
+
     }
 
-    // Check stress level
-    if (stressInput && !stressInput.value) {
 
-        alert("Please select your stress level.");
+    // Validate stress level
+
+    if (!stressInput || !stressInput.value) {
+
+        alert("Please select your perceived stress level.");
+
+        stressGroup?.scrollIntoView({
+            behavior: "smooth",
+            block: "center"
+        });
 
         return false;
+
     }
 
     return true;
+
 }
+
 
 // ==========================================
 // COLLECT FORM DATA
@@ -299,123 +341,114 @@ function collectFormData() {
 
     const payload = Object.fromEntries(formData.entries());
 
-    // Convert numerical fields into numbers
+
+    // Convert numerical values into numbers
+
     const numericFields = [
         "age",
         "avg_daily_usage_hours",
         "daily_unlocks",
         "study_hours",
         "physical_activity_hours",
-        "sleep_hours_per_night",
-        "stress_level"
+        "sleep_hours_per_night"
     ];
 
     numericFields.forEach(field => {
 
-        if (payload[field] !== undefined && payload[field] !== "") {
+        if (payload[field] !== undefined) {
+
             payload[field] = Number(payload[field]);
+
         }
 
     });
 
+
+    // Stress level is a categorical string:
+    // Low, Medium, High, Very High
+
     return payload;
+
 }
 
-// ==========================================
-// SCORE INTERPRETATION
-// ==========================================
-
-function getScoreInterpretation(score) {
-
-    if (score < 30) {
-
-        return {
-            band: "Low",
-            context: "Your predicted score falls in the low range."
-        };
-
-    } else if (score < 60) {
-
-        return {
-            band: "Moderate",
-            context: "Your predicted score falls in the moderate range."
-        };
-
-    } else if (score < 80) {
-
-        return {
-            band: "High",
-            context: "Your predicted score falls in the high range."
-        };
-
-    } else {
-
-        return {
-            band: "Very High",
-            context: "Your predicted score falls in the very high range."
-        };
-
-    }
-}
 
 // ==========================================
-// DISPLAY PREDICTION RESULT
+// DISPLAY PREDICTION RESULT (0-10 SCALE)
 // ==========================================
 
 function displayResult(score) {
 
     const numericScore = Number(score);
 
-    if (!Number.isFinite(numericScore)) {
+
+    // Validate prediction
+
+    if (!Number.isFinite(numericScore) ||
+        numericScore < 0 ||
+        numericScore > 10) {
 
         showError(
-            "Invalid prediction",
-            "The server returned an invalid prediction score."
+            "The backend returned an invalid score. Expected a value between 0 and 10."
         );
 
         return;
+
     }
 
-    const interpretation = getScoreInterpretation(numericScore);
 
-    // Display score
+    // Display actual model score
+
     if (scoreNumber) {
+
         scoreNumber.textContent = numericScore.toFixed(2);
+
     }
 
-    // Display score category
+
+    // Neutral score description:
+    // Avoid assuming whether higher means better or worse.
+
     if (scoreBand) {
-        scoreBand.textContent = interpretation.band;
+
+        scoreBand.textContent = "Predicted Mental Health Score";
+
     }
 
-    // Display explanation
     if (scoreContext) {
-        scoreContext.textContent = interpretation.context;
+
+        scoreContext.textContent =
+            "Your model-generated prediction on a scale of 0 to 10.";
+
     }
 
-    // Update gauge
-    const normalizedScore = Math.min(
-        100,
-        Math.max(0, numericScore)
-    );
+
+    // Convert 0-10 score into 0-100 percentage
+    // ONLY for visual gauge positioning.
+
+    const gaugePercentage = (numericScore / 10) * 100;
+
+
+    // Update SVG gauge
 
     if (gaugeFill) {
 
-        gaugeFill.style.width = `${normalizedScore}%`;
+        const pathLength = gaugeFill.getTotalLength();
 
-        gaugeFill.style.setProperty(
-            "--score",
-            normalizedScore
-        );
+        gaugeFill.style.strokeDasharray = pathLength;
 
-        gaugeFill.setAttribute(
-            "aria-valuenow",
-            normalizedScore
-        );
+        gaugeFill.style.strokeDashoffset =
+            pathLength * (1 - gaugePercentage / 100);
+
+        gaugeFill.style.transition =
+            "stroke-dashoffset 1s ease";
+
     }
 
+
     showState("result");
+
 }
+
 
 // ==========================================
 // SUBMIT FORM AND CALL FASTAPI
@@ -425,25 +458,38 @@ form.addEventListener("submit", async function (event) {
 
     event.preventDefault();
 
-    // Validate before sending data
+
+    // Validate before API request
+
     if (!validateForm()) {
+
         return;
+
     }
+
 
     const payload = collectFormData();
 
+    console.log("Sending prediction data:", payload);
+
+
     // Show loading state
+
     showState("loading");
 
     if (submitBtn) {
+
         submitBtn.disabled = true;
+
     }
+
 
     try {
 
         const response = await fetch(
             `${API_BASE}/predict`,
             {
+
                 method: "POST",
 
                 headers: {
@@ -451,91 +497,103 @@ form.addEventListener("submit", async function (event) {
                 },
 
                 body: JSON.stringify(payload)
+
             }
         );
 
-        // Handle unsuccessful API responses
-        if (!response.ok) {
 
-            let errorMessage = "Unable to process your prediction.";
+        // Read response as text first
 
-            try {
+        const responseText = await response.text();
 
-                const errorData = await response.json();
+        console.log("Backend response:", responseText);
 
-                if (errorData.detail) {
-                    errorMessage = Array.isArray(errorData.detail)
-                        ? errorData.detail.map(item => item.msg).join(", ")
-                        : errorData.detail;
-                }
 
-            } catch (error) {
-                // Keep default error message
-            }
+        // Handle empty response
 
-            throw new Error(errorMessage);
+        if (!responseText) {
+
+            throw new Error(
+                `Backend returned an empty response. HTTP status: ${response.status}`
+            );
+
         }
 
-const responseText = await response.text();
 
-console.log("Backend response:", responseText);
+        // Parse JSON safely
 
-let result;
+        let result;
 
-try {
-    result = JSON.parse(responseText);
-} catch (error) {
-    throw new Error(
-        `Backend returned an invalid or empty response. HTTP Status: ${response.status}`
-    );
-}
+        try {
 
-if (!response.ok) {
-    throw new Error(
-        result.detail || "Backend prediction failed."
-    );
-}
+            result = JSON.parse(responseText);
 
-const predictedScore = result.predicted_mental_health_score;
+        } catch (error) {
 
-if (predictedScore === undefined || predictedScore === null) {
-    throw new Error("Prediction score is missing from backend response.");
-}
+            throw new Error(
+                `Backend returned invalid JSON. HTTP status: ${response.status}`
+            );
 
-displayResult(predictedScore);
+        }
 
-        // Read prediction from FastAPI response
+
+        // Handle unsuccessful API response
+
+        if (!response.ok) {
+
+            const detail = result.detail;
+
+            const errorMessage = Array.isArray(detail)
+                ? detail.map(item => item.msg).join(", ")
+                : detail || "Prediction request failed.";
+
+            throw new Error(errorMessage);
+
+        }
+
+
+        // Get prediction from FastAPI
+
         const predictedScore =
             result.predicted_mental_health_score;
 
-        if (predictedScore === undefined || predictedScore === null) {
+
+        if (predictedScore === undefined ||
+            predictedScore === null) {
 
             throw new Error(
-                "Prediction score was not found in the API response."
+                "Prediction score is missing from the backend response."
             );
+
         }
 
-        // Display prediction
+
+        // Display prediction on 0-10 scale
+
         displayResult(predictedScore);
+
 
     } catch (error) {
 
-        console.error("Prediction Error:", error);
+        console.error("Prediction error:", error);
 
         showError(
-            "Prediction Failed",
-            error.message || "Please check your backend connection and try again."
+            error.message ||
+            "Unable to connect to the prediction server."
         );
 
     } finally {
 
         if (submitBtn) {
+
             submitBtn.disabled = false;
+
         }
 
     }
 
 });
+
 
 // ==========================================
 // RESET FORM
@@ -545,65 +603,89 @@ function resetForm() {
 
     form.reset();
 
-    // Reset stress level
+
+    // Reset stress selection
+
     if (stressInput) {
+
         stressInput.value = "";
+
     }
 
     if (stressGroup) {
 
-        stressGroup.querySelectorAll(
-            "button, [data-value], [data-stress-level]"
-        ).forEach(option => {
+        stressGroup.querySelectorAll(".seg-btn").forEach(button => {
 
-            option.classList.remove("active", "selected");
+            button.classList.remove("active", "selected");
 
-            option.setAttribute("aria-pressed", "false");
+            button.setAttribute("aria-pressed", "false");
 
         });
 
     }
 
-    // Reset hour limits and remaining-hours message
+
+    // Reset hour limits
+
     hoursFields.forEach(field => {
+
         field.max = 24;
+
     });
 
     updateHoursBudget();
 
-    // Reset gauge
+
+    // Reset prediction display
+
     if (scoreNumber) {
-        scoreNumber.textContent = "--";
+
+        scoreNumber.textContent = "0.0";
+
     }
 
     if (scoreBand) {
-        scoreBand.textContent = "";
+
+        scoreBand.textContent = "—";
+
     }
 
     if (scoreContext) {
+
         scoreContext.textContent = "";
+
     }
+
+
+    // Reset gauge
 
     if (gaugeFill) {
-        gaugeFill.style.width = "0%";
-        gaugeFill.style.setProperty("--score", 0);
+
+        gaugeFill.style.strokeDashoffset =
+            gaugeFill.getTotalLength();
+
     }
+
 
     // Enable submit button
+
     if (submitBtn) {
+
         submitBtn.disabled = false;
+
     }
 
-    // Return to initial state
+
     showState("idle");
+
 }
 
+
 // Reset button
+
 if (resetBtn) {
 
-    resetBtn.addEventListener("click", function (event) {
-
-        event.preventDefault();
+    resetBtn.addEventListener("click", function () {
 
         resetForm();
 
@@ -611,20 +693,21 @@ if (resetBtn) {
 
 }
 
+
 // Retry button
+
 if (retryBtn) {
 
     retryBtn.addEventListener("click", function () {
 
         showState("idle");
 
-        if (form) {
-            form.requestSubmit();
-        }
+        form.requestSubmit();
 
     });
 
 }
+
 
 // ==========================================
 // INITIAL PAGE STATE
